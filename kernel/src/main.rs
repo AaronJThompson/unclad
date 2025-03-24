@@ -2,8 +2,11 @@
 #![no_main]
 #![feature(abi_x86_interrupt)]
 #![allow(static_mut_refs)]
+#![feature(allocator_api)]
+#![feature(naked_functions)]
 
 extern crate alloc;
+extern crate bootloader_api;
 
 use acpi::{AcpiHandler, AcpiTables, PhysicalMapping};
 use bootloader_api::{config::Mapping, info::FrameBufferInfo};
@@ -11,6 +14,7 @@ use bootloader_x86_64_common::logger::LockedLogger;
 use buddy_system_allocator::{LockedFrameAllocator, LockedHeap};
 use conquer_once::spin::OnceCell;
 use memory::{allocate_heap, assign_frames};
+use multicore::copy_ap_trampoline;
 use core::{cell::UnsafeCell, panic::PanicInfo, ptr::NonNull};
 use x86_64::{
     instructions::{interrupts, port::Port}, registers::{
@@ -24,9 +28,14 @@ use x86_64::{
 
 mod memory;
 mod x86_ext;
+mod multicore;
+mod stack;
 
 #[global_allocator]
 static HEAP: LockedHeap<32> = LockedHeap::empty();
+
+pub(crate) const MAX_PROC_COUNT: usize = 32;
+pub(crate) const MAX_STACK_SIZE: usize = 0x8000;
 
 static mut FRAME_ALLOC: OnceCell<LockedFrameAllocator<32>> = OnceCell::uninit();
 
@@ -52,7 +61,10 @@ const CONFIG: bootloader_api::BootloaderConfig = {
 };
 
 bootloader_api::entry_point!(kernel_main, config = &CONFIG);
+
+#[unsafe(no_mangle)]
 fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
+    copy_ap_trampoline(VirtAddr::new(0x1000));
     let physical_offset = boot_info.physical_memory_offset.into_option().unwrap();
     PHYS_OFFSET.init_once(|| physical_offset as usize);
     let frame_buffer = boot_info.framebuffer.as_mut().unwrap();
@@ -117,7 +129,7 @@ impl AcpiHandler for OffsetMappedHandler {
         }
     }
 
-    fn unmap_physical_region<T>(_region: &PhysicalMapping<Self, T>) {}
+    fn unmap_physical_region<T>(_: &PhysicalMapping<Self, T>) {}
 }
 
 fn parse_acpi(offset: VirtAddr, rsdp_addr: u64) {

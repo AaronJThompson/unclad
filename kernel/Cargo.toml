@@ -8,12 +8,12 @@ test = false
 bench = false
 
 [dependencies]
-bootloader_api = "*"
+bootloader_api = { path = "../../bootloader/api" }
 vga = "0.2.9"
 x86_64 = "0.15.2"
 bitflags = { version = "2.9.0", default-features = false }
 conquer-once = { version = "0.4.0", default-features = false }
-bootloader-x86_64-common = "0.11.4"
+bootloader-x86_64-common = { path = "../../bootloader/common" }
 log = { version = "0.4.17", default-features = false }
 acpi = "5.2.0"
 embedded-alloc = "0.6.0"

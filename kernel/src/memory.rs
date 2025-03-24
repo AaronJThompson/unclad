@@ -5,7 +5,7 @@ use x86_64::{
     PhysAddr, VirtAddr,
     structures::paging::{
         Mapper, OffsetPageTable, Page, PageSize, PageTable, PageTableFlags,
-        PhysFrame, Size4KiB, frame,
+        PhysFrame, Size4KiB, frame, FrameAllocator as FrameAllocatorTrait,
     },
 };
 
@@ -61,6 +61,15 @@ pub unsafe fn get_active_opt(physical_memory_offset: VirtAddr) -> OffsetPageTabl
 //         frame
 //     }
 // }
+
+pub struct FrameAllocatorWrapper<'a>(pub(crate) &'a mut FrameAllocator<32>);
+
+unsafe impl<S: PageSize> FrameAllocatorTrait<S> for FrameAllocatorWrapper<'_> {
+    fn allocate_frame(&mut self) -> Option<PhysFrame<S>> {
+        let frame_num = self.0.alloc(1).unwrap();
+        Some(PhysFrame::from_start_address(PhysAddr::new(frame_num as u64 * S::SIZE)).unwrap())
+    }
+}
 
 pub fn allocate_heap<S: PageSize, const O: usize>(
     frame_allocator: &mut FrameAllocator<O>,
