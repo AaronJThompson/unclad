@@ -4,6 +4,7 @@
 #![allow(static_mut_refs)]
 #![feature(allocator_api)]
 #![feature(naked_functions)]
+#![feature(core_intrinsics)]
 
 extern crate alloc;
 extern crate bootloader_api;
