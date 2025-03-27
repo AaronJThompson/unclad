@@ -47,7 +47,7 @@ fn assemble_x86_64_smp_boot() -> Result<()> {
 	let status = Command::new(&rust_lld)
 		.arg("-flavor")
 		.arg("gnu")
-		.arg("--section-start=.text=0x0")
+		.arg("--section-start=.text=0x0000")
 		.arg("--oformat=binary")
 		.arg("-o")
 		.arg(&boot_bin)

@@ -70,7 +70,7 @@ protected_mode_entry:
     or eax, (1 << 5)  # PAE bit
     mov cr4, eax
 
-    #BUG: Could have a problem here, jumps after paging could be incorrect
+    # BUG: Could have a problem here, jumps after paging could be incorrect
     mov eax, cr0
     or eax, 0x80000000   # Paging Enable
     mov cr0, eax
