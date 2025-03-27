@@ -7,6 +7,10 @@ name = "kernel"
 test = false
 bench = false
 
+[build-dependencies]
+anyhow = "*"
+llvm-tools = "*"
+
 [dependencies]
 bootloader_api = { path = "../../bootloader/api" }
 vga = "0.2.9"

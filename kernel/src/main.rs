@@ -9,13 +9,14 @@
 extern crate alloc;
 extern crate bootloader_api;
 
-use acpi::{AcpiHandler, AcpiTables, PhysicalMapping};
+use acpi::{AcpiHandler, AcpiTables, PhysicalMapping, PlatformInfo};
+use alloc::alloc::Global;
 use bootloader_api::{config::Mapping, info::FrameBufferInfo};
 use bootloader_x86_64_common::logger::LockedLogger;
 use buddy_system_allocator::{LockedFrameAllocator, LockedHeap};
 use conquer_once::spin::OnceCell;
 use memory::{allocate_heap, assign_frames};
-use multicore::copy_ap_trampoline;
+use multicore::{copy_ap_trampoline, setup_cores};
 use core::{cell::UnsafeCell, panic::PanicInfo, ptr::NonNull};
 use x86_64::{
     instructions::{interrupts, port::Port}, registers::{
@@ -65,7 +66,6 @@ bootloader_api::entry_point!(kernel_main, config = &CONFIG);
 
 #[unsafe(no_mangle)]
 fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
-    copy_ap_trampoline(VirtAddr::new(0x1000));
     let physical_offset = boot_info.physical_memory_offset.into_option().unwrap();
     PHYS_OFFSET.init_once(|| physical_offset as usize);
     let frame_buffer = boot_info.framebuffer.as_mut().unwrap();
@@ -97,10 +97,12 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
         Cr4Flags::PHYSICAL_ADDRESS_EXTENSION,
         Cr0Flags::PROTECTED_MODE_ENABLE | Cr0Flags::PAGING,
     );
-    parse_acpi(
+    let acpi = parse_acpi(
         physical_map.phys_offset(),
         boot_info.rsdp_addr.into_option().unwrap(),
     );
+    let platform_info = acpi.platform_info().unwrap();
+    setup_cores(platform_info.processor_info.unwrap());
     loop {}
 }
 
@@ -133,13 +135,10 @@ impl AcpiHandler for OffsetMappedHandler {
     fn unmap_physical_region<T>(_: &PhysicalMapping<Self, T>) {}
 }
 
-fn parse_acpi(offset: VirtAddr, rsdp_addr: u64) {
-    let tables = unsafe {
+fn parse_acpi(offset: VirtAddr, rsdp_addr: u64) -> AcpiTables<OffsetMappedHandler> {
+    unsafe {
         AcpiTables::from_rsdp(OffsetMappedHandler { offset }, rsdp_addr as usize).unwrap()
-    };
-    let pt = tables.platform_info().unwrap();
-    log::info!("{:?}", pt.processor_info.unwrap());
-    log::info!("{:#?}", tables.platform_info());
+    }
 }
 
 fn my_general_handler(stack_frame: InterruptStackFrame, index: u8, error_code: Option<u64>) {

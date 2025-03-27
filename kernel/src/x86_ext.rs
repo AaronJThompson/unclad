@@ -5,8 +5,9 @@ trait ToFrameNumeric<S: PageSize> {
 }
 
 impl<S: PageSize> ToFrameNumeric<S> for PhysFrame<S> {
-    //Phys 
+
+    #[inline]
     fn to_frame_numeric(&self) -> usize {
-        self.start_address().as_u64() as usize
+        self.start_address().as_u64() as usize / (S::SIZE as usize)
     }
 }

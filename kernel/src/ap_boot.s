@@ -1,150 +1,134 @@
-# This is adapted from the great devs over at (<https://github.com/hermit-os>)
-# go check them out! AP boot code is a pain so this is a great resource to have
-
+# Fully Relocatable x86_64 Long Mode Trampoline
 .intel_syntax noprefix
 
-.set CR0_PG,    1 << 31
-.set CR4_PAE,   1 << 5
-.set MSR_EFER,  0xC0000080
-.set EFER_LME,  1 << 8
-.set EFER_NXE,  1 << 11
-
-.code16
+.org 0
 .section .text
-.global _start
-_start:
-    jmp _rmstart
+.global trampoline_start
+.global trampoline_end
+.global entry_point
+.global stack_pointer
+.global page_table_l4
+.code16
+trampoline_start:
+    # Capture the current location using Intel syntax call
+    call get_rip
 
-# PARAMETERS
 .align 8
-    entry_point:    .8byte 0xDEADC0DE
-    cpu_id:         .4byte 0xC0DECAFE
-    pml4:           .4byte 0xDEADBEEF
-    pad:            .4byte 0
+entry_point: .8byte 0  # 64-bit entry point to jump to
+stack_pointer: .8byte 0  # 64-bit stack pointer to use
+page_table_l4: .4byte 0  # Physical address of PML4 table
+    
+.set ip_offset, get_rip - trampoline_start
+get_rip:
+    pop ebx                     # RBX now contains the current instruction pointer
+    sub ebx, ip_offset  # Adjust to the trampoline's start
+    mov [base_address], ebx      # Store base address for later use
 
-_rmstart:
+    # Disable interrupts
     cli
-    lgdt [gdtr]
 
-    # switch to protected mode by setting PE bit
+    # A20 line enable
+    in al, 0x92
+    or al, 2
+    out 0x92, al
+
+    # Dynamically calculate GDT descriptor
+    lea eax, [ebx + gdt_descriptor]
+    mov [gdt_dynamic_address], eax
+
+    # Load dynamically calculated GDT
+    lgdt [gdt_dynamic_address]
+
+    # Enable Protected Mode
     mov eax, cr0
-    or al, 0x1
+    or eax, 1
     mov cr0, eax
 
-    # https://github.com/llvm/llvm-project/issues/46048
-    .att_syntax prefix
-    # far jump to the 32bit code
-    ljmpl $codesel, $_pmstart
-    .intel_syntax noprefix
+    # Relative far jump to protected mode
+    call compute_far_jump
+    
+# Dynamic far jump computation
+compute_far_jump:
+    pop ax                      # Return address
+    push 0x08              # Code segment selector
+    lea eax, [ebx + protected_mode_entry]
+    push eax
+    retf                        # Far return performs the jump
 
 .code32
-.align 4
-_pmstart:
-    xor eax, eax
-    mov ax, OFFSET datasel
-    mov ds, eax
-    mov es, eax
-    mov fs, eax
-    mov gs, eax
-    mov ss, eax
+protected_mode_entry:
+    # Set up segments
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
 
-    jmp short stublet
-2:
-    jmp 2b
-
-# GDT for the protected mode
-.align 4
-gdtr:                           # descriptor table
-    .2byte  gdt_end - gdt - 1   # limit
-    .4byte  gdt                 # base address
-gdt:
-    .8byte  0                   # null descriptor
-.set codesel, . - gdt
-    .2byte  0xFFFF              # segment size 0..15
-    .2byte  0                   # segment address 0..15
-    .byte   0                   # segment address 16..23
-    .byte   0x9A                # access permissions und type
-    .byte   0xCF                # additional information and segment size 16...19
-    .byte   0                   # segment address 24..31
-.set datasel, . - gdt
-    .2byte  0xFFFF              # segment size 0..15
-    .2byte  0                   # segment address 0..15
-    .byte   0                   # segment address 16..23
-    .byte   0x92                # access permissions and type
-    .byte   0xCF                # additional informationen and degment size 16...19
-    .byte   0                   # segment address 24..31
-gdt_end:
-
-.align 4
-GDTR64:
-    .2byte GDT64_end - GDT64 - 1    # Limit.
-    .8byte GDT64                    # Base.
-
-# we need a new GDT to switch in the 64bit modus
-GDT64:                              # Global Descriptor Table (64-bit).
-.set GDT64.Null, . - GDT64          # The null descriptor.
-    .2byte  0                       # Limit (low).
-    .2byte  0                       # Base (low).
-    .byte   0                       # Base (middle)
-    .byte   0                       # Access.
-    .byte   0                       # Granularity.
-    .byte   0                       # Base (high).
-.set GDT64.Code, . - GDT64          # The code descriptor.
-    .2byte  0                       # Limit (low).
-    .2byte  0                       # Base (low).
-    .byte   0                       # Base (middle)
-    .byte   0b10011010              # Access.
-    .byte   0b00100000              # Granularity.
-    .byte   0                       # Base (high).
-.set GDT64.Data, . - GDT64          # The data descriptor.
-    .2byte  0                       # Limit (low).
-    .2byte  0                       # Base (low).
-    .byte   0                       # Base (middle)
-    .byte   0b10010010              # Access.
-    .byte   0b00000000              # Granularity.
-    .byte   0                       # Base (high).
-GDT64_end:
-
-.align 4
-stublet:
-    # Enable PAE mode.
+    # Enable PAE
     mov eax, cr4
-    or eax, CR4_PAE
+    or eax, (1 << 5)  # PAE bit
     mov cr4, eax
 
-    # Set the address to PML4 in CR3.
-    mov eax, [pml4]
-    mov cr3, eax
-
-    # Enable x86-64 Compatibility Mode by setting EFER_LME.
-    # Also enable early access to NO_EXECUTE-protected memory through EFER_NXE.
-    mov ecx, MSR_EFER
-    rdmsr
-    or eax, EFER_LME | EFER_NXE
-    wrmsr
-
-    # Enable Paging.
+    #BUG: Could have a problem here, jumps after paging could be incorrect
     mov eax, cr0
-    or eax, CR0_PG
+    or eax, 0x80000000   # Paging Enable
     mov cr0, eax
 
-    # Load the 64-bit global descriptor table.
-    lgdt [GDTR64]
-    mov ax, OFFSET GDT64.Data
-    mov ss, eax
-    mov ds, eax
-    mov es, eax
+    # Prepare for long mode entry
+    call compute_long_mode_jump
 
-    # https://github.com/llvm/llvm-project/issues/46048
-    .att_syntax prefix
-    # Set the code segment and enter 64-bit long mode.
-    ljmpl $GDT64.Code, $start64
-    .intel_syntax noprefix
+compute_long_mode_jump:
+    pop eax                     # Return address
+    push 0x08              # Code segment selector
+    mov ebx, [base_address]
+    lea eax, [ebx + long_mode_entry]
+    push eax
+    retf                        # Far return performs the jump
 
 .code64
+long_mode_entry:
+    # Enable long mode MSR
+    mov ecx, 0xC0000080  # EFER MSR
+    rdmsr
+    or eax, (1 << 8)     # Long Mode Enable
+    wrmsr
+
+    # Enable paging
+
+    # Set up 64-bit segments
+    xor rax, rax
+    mov ax, 0x10
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+
+    # Load configuration
+    mov rsp, [ebx + stack_pointer]
+    call entry_point
+
+    # Halt if entry point returns
+
+    cli
+    hlt
+
 .align 8
-start64:
-    # call `_start`
-    xor rdi, rdi
-    mov esi, [cpu_id]
-    jmp [entry_point]
+base_address: .2byte 0
+
+# Dynamically computed GDT
+
+gdt_start:
+.quad 0x0000000000000000  # Null descriptor
+.quad 0x00AF9A000000FFFF  # 64-bit Code Segment
+.quad 0x00AF92000000FFFF  # 64-bit Data Segment
+gdt_end:
+
+# Dynamic GDT descriptor
+gdt_dynamic_address: .4byte 0
+gdt_descriptor:
+    .word gdt_end - gdt_start - 1  # GDT size
+    .quad 0                        # Placeholder for base (will be filled dynamically)
+
+trampoline_end:
