@@ -1,0 +1,13 @@
+[package]
+name = "apic"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# TODO: Use workspace dependencies
+x86_64 = "*"
+raw-cpuid = "*"
+
+[features]
+2xapic = []
+dynamic_apic = []

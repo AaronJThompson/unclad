@@ -20,6 +20,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dcfed56ad506cb2c684a14971b8861fdc3baaaae314b9e5f9bb532cbe3ba7a4f"
 
 [[package]]
+name = "apic"
+version = "0.1.0"
+dependencies = [
+ "raw-cpuid",
+ "x86_64 0.14.13",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -272,12 +280,14 @@ name = "kernel"
 version = "0.0.0"
 dependencies = [
  "acpi",
+ "anyhow",
  "bitflags 2.9.0",
  "bootloader-x86_64-common",
  "bootloader_api",
  "buddy_system_allocator",
  "conquer-once 0.4.0",
  "embedded-alloc",
+ "llvm-tools",
  "log",
  "vga",
  "x86_64 0.15.2",

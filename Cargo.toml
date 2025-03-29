@@ -13,4 +13,4 @@ ovmf-prebuilt = "0.1.0-alpha.1"
 
 [workspace]
 resolver = "2"
-members = ["kernel"]
+members = [ "apic","kernel"]

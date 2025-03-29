@@ -24,11 +24,7 @@ const BOOT_OFFSET_BASE_ADDR: u64 = BOOT_OFFSET_PML4 + 0x04;
 
 #[unsafe(no_mangle)]
 pub fn ap_main() -> ! {
-    //We have no stack yet, assign rsp
-    //ESI contains CPU ID
-    unsafe {
-        asm!("mov rsp, [{} + rsi * 8]", in(reg) &STACK_REFS);
-    }
+    
     let cur_ap = AP_COUNTER.fetch_add(1, core::sync::atomic::Ordering::SeqCst);
     log::info!("AP {} started", cur_ap);
     //TODO: Setup APIC, interrupt handlers, etc.

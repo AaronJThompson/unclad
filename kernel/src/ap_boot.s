@@ -107,6 +107,8 @@ long_mode_entry:
 
     # Load configuration
     mov rsp, [ebx + stack_pointer]
+
+    # Maybe LEA entry point?
     call entry_point
 
     # Halt if entry point returns

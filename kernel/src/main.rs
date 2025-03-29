@@ -5,6 +5,7 @@
 #![feature(allocator_api)]
 #![feature(naked_functions)]
 #![feature(core_intrinsics)]
+#![feature(const_trait_impl)]
 
 extern crate alloc;
 extern crate bootloader_api;
@@ -33,13 +34,15 @@ mod x86_ext;
 mod multicore;
 mod stack;
 
+const ALLOC_ORDER: usize = 32;
+
 #[global_allocator]
-static HEAP: LockedHeap<32> = LockedHeap::empty();
+static HEAP: LockedHeap<ALLOC_ORDER> = LockedHeap::empty();
 
 pub(crate) const MAX_PROC_COUNT: usize = 32;
 pub(crate) const MAX_STACK_SIZE: usize = 0x8000;
 
-static mut FRAME_ALLOC: OnceCell<LockedFrameAllocator<32>> = OnceCell::uninit();
+static mut FRAME_ALLOC: OnceCell<LockedFrameAllocator<ALLOC_ORDER>> = OnceCell::uninit();
 
 // ...
 pub(crate) static LOGGER: OnceCell<LockedLogger> = OnceCell::uninit();
