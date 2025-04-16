@@ -24,7 +24,6 @@ name = "apic"
 version = "0.1.0"
 dependencies = [
  "raw-cpuid",
- "x86_64 0.14.13",
 ]
 
 [[package]]
@@ -290,6 +289,7 @@ dependencies = [
  "llvm-tools",
  "log",
  "vga",
+ "x86",
  "x86_64 0.15.2",
 ]
 

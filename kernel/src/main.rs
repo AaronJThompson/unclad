@@ -74,9 +74,7 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
     let frame_buffer = boot_info.framebuffer.as_mut().unwrap();
     let frame_buffer_info = frame_buffer.info().clone();
     let raw_frame_buffer = frame_buffer.buffer_mut();
-    for byte in &mut *raw_frame_buffer {
-        *byte = 0x00;
-    }
+    raw_frame_buffer.iter_mut().for_each(|byte| *byte = 0);
     init_logger(raw_frame_buffer, frame_buffer_info);
     log::info!("Logger initialized");
     init_frame_alloc();
@@ -105,7 +103,8 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
         boot_info.rsdp_addr.into_option().unwrap(),
     );
     let platform_info = acpi.platform_info().unwrap();
-    setup_cores(platform_info.processor_info.unwrap());
+    setup_periodic_interrupt(1000);
+    // setup_cores(platform_info.processor_info.unwrap());
     loop {}
 }
 
@@ -162,6 +161,7 @@ fn setup_periodic_interrupt(freq: u32) {
         pit_mode.write(0x36 as u8);
         pit_channel0.write((divisor & 0xFF) as u8);
         pit_channel0.write(((divisor >> 8) & 0xFF) as u8);
+        interrupts::enable();
     }
 }
 

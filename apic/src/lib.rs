@@ -1,5 +1,7 @@
 #![no_std]
 
+// Can't be making a kernel without a 'fully' 'compliant' APIC module
+
 use raw_cpuid::CpuId;
 
 //XAPIC is APIC compatible, no need to differentiate
@@ -8,6 +10,12 @@ pub enum ApicMode {
     XApic,
     X2Apic,
 }
+
+pub trait Apic {
+    const APIC_MODE: ApicMode;
+}
+
+
 
 pub fn get_apic_available() -> Option<ApicMode> {
     let feature_info = CpuId::new().get_feature_info()?;

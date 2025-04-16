@@ -89,8 +89,9 @@ pub fn alloc_stack_with_guard<M: Mapper<S>, S: PageSize>(
         let page = Page::containing_address(addr + (i as u64 * S::SIZE));
         let frame_num = FrameNumeric::from_num(first_frame_num.num + i);
         let frame = frame_num.into();
+        //CHECK: To flush or not to flush?
         unsafe {
-            mapper.map_to(
+            let _ = mapper.map_to(
                 page,
                 frame,
                 STACK_PAGE_FLAGS.assign_stack_ref(stack_ref),
@@ -102,7 +103,7 @@ pub fn alloc_stack_with_guard<M: Mapper<S>, S: PageSize>(
     let guard_page = Page::containing_address(addr + addr_offset.as_u64());
     unsafe {
         //CHECK: Will this even page fault?
-        mapper.map_to(
+        let _ = mapper.map_to(
             guard_page,
             invalid_physframe(),
             STACK_GUARD_FLAGS.assign_stack_ref(stack_ref),

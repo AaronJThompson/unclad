@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 # TODO: Use workspace dependencies
-x86_64 = "*"
 raw-cpuid = "*"
 
 [features]

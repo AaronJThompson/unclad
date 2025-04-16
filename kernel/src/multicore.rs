@@ -1,7 +1,8 @@
-use core::{arch::{asm, naked_asm}, intrinsics::size_of_val, ptr, sync::atomic::AtomicU8};
+use core::{arch::{asm, naked_asm}, intrinsics::size_of_val, mem::transmute, ptr, sync::atomic::AtomicU8};
 
 use acpi::platform::ProcessorInfo;
 use alloc::alloc::Global;
+use x86::apic::{xapic::XAPIC, ApicControl, ApicId};
 use x86_64::{structures::gdt::{Descriptor, GlobalDescriptorTable}, PhysAddr, VirtAddr};
 
 use crate::{memory::active_level_4_table, stack::STACK_REFS, PHYS_OFFSET};
@@ -32,12 +33,16 @@ pub fn ap_main() -> ! {
 }
 
 pub fn setup_cores(proc_info: ProcessorInfo<Global>) {
+    let mmio_region = unsafe { core::slice::from_raw_parts_mut(0xFEE00000 as *mut u32, 0x1000) };
+    let mut bsp_apic = bsp_init_apic(mmio_region);
     log::debug!("Setting up AP trampoline");
     let trampoline = copy_ap_trampoline(VirtAddr::new(0x8000 + unsafe {*PHYS_OFFSET.get_unchecked() as u64 }));
     let pml4 = unsafe { active_level_4_table(VirtAddr::new(*PHYS_OFFSET.get().unwrap() as u64)) };
     log::debug!("Starting APs");
     for (i, cpu) in proc_info.application_processors.iter().enumerate() {
         assign_trampoline_params(trampoline, i as u32, PhysAddr::new(pml4 as *const _ as u64));
+        let apic_id = cpu.local_apic_id;
+        unsafe { bsp_apic.ipi_init(ApicId::XApic(apic_id as u8)) };
     }
 }
 
@@ -56,4 +61,10 @@ pub fn assign_trampoline_params(trampoline: VirtAddr, cpu_id: u32, pml4: PhysAdd
 
     //BUG: Ensure PML4 is within 32-bit address space
     code[BOOT_OFFSET_PML4 as usize..BOOT_OFFSET_PML4 as usize + 4].copy_from_slice(&(pml4.as_u64() as u32).to_le_bytes());
+}
+
+pub fn bsp_init_apic(apic_region: &'static mut [u32]) -> XAPIC {
+    let mut apic = XAPIC::new(apic_region);
+    apic.attach();
+    apic
 }
