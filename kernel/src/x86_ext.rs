@@ -27,7 +27,7 @@ impl<S: PageSize> TryFrom<usize> for FrameNumeric<S> {
             return Err(AddressNotAligned);
         }
         Ok(FrameNumeric {
-            num: value,
+            num: value / (S::SIZE as usize),
             _marker: PhantomData,
         })
     }
@@ -41,7 +41,7 @@ impl<S: PageSize> TryFrom<u64> for FrameNumeric<S> {
             return Err(AddressNotAligned);
         }
         Ok(FrameNumeric {
-            num: value as usize,
+            num: value as usize / (S::SIZE as usize),
             _marker: PhantomData,
         })
     }

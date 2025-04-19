@@ -11,17 +11,26 @@
 .code16
 trampoline_start:
     # Capture the current location using Intel syntax call
+    mov eax, cs
     call get_rip
 
 .align 8
 entry_point: .8byte 0  # 64-bit entry point to jump to
 stack_pointer: .8byte 0  # 64-bit stack pointer to use
 page_table_l4: .4byte 0  # Physical address of PML4 table
+jump_holder: .4byte 0  # Placeholder for jump address
     
 .set ip_offset, get_rip - trampoline_start
 get_rip:
-    pop ebx                     # RBX now contains the current instruction pointer
-    sub ebx, ip_offset  # Adjust to the trampoline's start
+    # EAX contains reset vector
+    # EBX will be used to store the base address
+    # Calculate base address
+
+    xor ebx, ebx
+    mov ebx, eax
+    shl ebx, 4
+    xor eax, eax
+
     mov [base_address], ebx      # Store base address for later use
 
     # Disable interrupts
@@ -45,19 +54,22 @@ get_rip:
     mov cr0, eax
 
     # Relative far jump to protected mode
-    call compute_far_jump
+
+    jmp cs:protected_mode_entry
+;     call compute_far_jump
     
-# Dynamic far jump computation
-compute_far_jump:
-    pop ax                      # Return address
-    push 0x08              # Code segment selector
-    lea eax, [ebx + protected_mode_entry]
-    push eax
-    retf                        # Far return performs the jump
+; # Dynamic far jump computation
+; compute_far_jump:
+;     pop ax                      # Return address
+;     lea eax, [protected_mode_entry]
 
 .code32
 protected_mode_entry:
     # Set up segments
+    hlt
+    hlt
+
+    # BUG: Something is wrong here
     mov ax, 0x10
     mov ds, ax
     mov es, ax
@@ -65,6 +77,8 @@ protected_mode_entry:
     mov gs, ax
     mov ss, ax
 
+    hlt
+    hlt
     # Enable PAE
     mov eax, cr4
     or eax, (1 << 5)  # PAE bit
@@ -75,8 +89,12 @@ protected_mode_entry:
     or eax, 0x80000000   # Paging Enable
     mov cr0, eax
 
+    hlt
+    hlt
+
     # Prepare for long mode entry
-    call compute_long_mode_jump
+    
+    jmp cs:long_mode_entry
 
 compute_long_mode_jump:
     pop eax                     # Return address
@@ -88,6 +106,9 @@ compute_long_mode_jump:
 
 .code64
 long_mode_entry:
+    hlt
+    hlt 
+    hlt
     # Enable long mode MSR
     mov ecx, 0xC0000080  # EFER MSR
     rdmsr
@@ -109,7 +130,8 @@ long_mode_entry:
     mov rsp, [ebx + stack_pointer]
 
     # Maybe LEA entry point?
-    call entry_point
+    lea rax, [ebx + entry_point]
+    call rax
 
     # Halt if entry point returns
 
@@ -132,5 +154,8 @@ gdt_dynamic_address: .4byte 0
 gdt_descriptor:
     .word gdt_end - gdt_start - 1  # GDT size
     .quad 0                        # Placeholder for base (will be filled dynamically)
+
+small_stack:
+    .space 4096                   # 4KB stack space
 
 trampoline_end:

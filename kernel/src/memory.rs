@@ -28,6 +28,13 @@ pub unsafe fn get_active_opt(physical_memory_offset: VirtAddr) -> OffsetPageTabl
     OffsetPageTable::new(l4_table, physical_memory_offset)
 }
 
+//TODO: Make const at somepoint once we can statically know offset
+pub fn phys_to_virt(addr: PhysAddr) -> VirtAddr {
+    let offset = unsafe{ *PHYS_OFFSET.get_unchecked() };
+    let virt_addr = addr.as_u64() + offset as u64;
+    VirtAddr::new(virt_addr)
+}
+
 pub struct FrameAllocatorWrapper<'a>(pub(crate) &'a mut FrameAllocator<ALLOC_ORDER>);
 
 unsafe impl<S: PageSize> FrameAllocatorTrait<S> for FrameAllocatorWrapper<'_> {
@@ -62,7 +69,7 @@ pub fn assign_frames<S: PageSize, const O: usize>(mr: &MemoryRegions, frame_allo
     });
     log::info!("Assigning frames");
     let mut heap_allocated = false;
-    for frame_range in usable_frame_ranges {
+    for frame_range in usable_frame_ranges.filter(|r| r.start.start_address().as_u64() != 0x8000) {
         let mut frame_start = frame_range.start.start_address().as_u64() / S::SIZE;
         let frame_end = frame_range.end.start_address().as_u64() / S::SIZE;
         if !heap_allocated {

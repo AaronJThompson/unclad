@@ -103,8 +103,8 @@ fn kernel_main(boot_info: &'static mut bootloader_api::BootInfo) -> ! {
         boot_info.rsdp_addr.into_option().unwrap(),
     );
     let platform_info = acpi.platform_info().unwrap();
-    setup_periodic_interrupt(1000);
-    // setup_cores(platform_info.processor_info.unwrap());
+    //setup_periodic_interrupt(1000);
+    setup_cores(platform_info.processor_info.unwrap());
     loop {}
 }
 
@@ -145,11 +145,17 @@ fn parse_acpi(offset: VirtAddr, rsdp_addr: u64) -> AcpiTables<OffsetMappedHandle
 
 fn my_general_handler(stack_frame: InterruptStackFrame, index: u8, error_code: Option<u64>) {
     log::info!(
-        "Interrupt: {}, ErrorCode: {}, PL: {:?}",
+        "Interrupt: {}, ErrorCode: {}, PL: {:?}, IP: {:?}, CS: {:?}, SP: {:?}",
         index,
         error_code.unwrap_or(0),
-        stack_frame.code_segment.rpl()
+        stack_frame.code_segment.rpl(),
+        stack_frame.instruction_pointer,
+        stack_frame.code_segment,
+        stack_frame.stack_pointer,
     );
+    if index == 14 {
+        panic!("PF fault");
+    }
 }
 
 fn setup_periodic_interrupt(freq: u32) {
@@ -194,5 +200,6 @@ fn assert_cpu_state(privilege_level: PrivilegeLevel, cr4_flags: Cr4Flags, cr0_fl
 
 #[panic_handler]
 pub fn panic(_info: &PanicInfo) -> ! {
+    log::error!("Kernel panic: {}", _info);
     loop {}
 }
